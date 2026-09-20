@@ -31,13 +31,13 @@ readonly class Path implements Stringable, Countable
      *
      * @param array<string|int> $segments
      */
-    private function __construct(public array $segments)
+    final private function __construct(public array $segments)
     {
     }
 
     /**
      * Creates a validated path from segments.
-     *
+     * @param string $attribute
      * @param string|int ...$segments
      *
      * @throws InvalidArgumentException
