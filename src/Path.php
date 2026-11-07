@@ -23,6 +23,8 @@ use const JSON_UNESCAPED_UNICODE;
 
 readonly class Path implements Stringable, Countable
 {
+    private const MAX_DEPTH = 32;
+
     private const MARSHALLED_LIST_TYPE = 'L';
     private const MARSHALLED_MAP_TYPE = 'M';
 
@@ -30,9 +32,18 @@ readonly class Path implements Stringable, Countable
      * Creates a path from segments.
      *
      * @param array<string|int> $segments
+     *
+     * @throws InvalidArgumentException
      */
     final private function __construct(public array $segments)
     {
+        $depth = count($segments) - 1;
+
+        if ($depth > self::MAX_DEPTH) {
+            throw new InvalidArgumentException(
+                sprintf('Path depth cannot exceed %d.', self::MAX_DEPTH)
+            );
+        }
     }
 
     /**
@@ -246,12 +257,15 @@ readonly class Path implements Stringable, Countable
     /**
      * Returns child path for given segments.
      *
-     * @param array<int|string, string|int> $segments
+     * @param string|int $attribute
+     * @param string|int ...$segments
      *
      * @throws InvalidArgumentException
      */
-    public function child(array $segments): static
+    public function child(string|int $attribute, string|int ...$segments): static
     {
+        $segments = [$attribute, ...$segments];
+
         self::validateSegments($segments);
 
         return new static([...$this->segments, ...array_values($segments)]);
