@@ -2,10 +2,13 @@
 
 namespace DynaPath\Tests;
 
+use ArgumentCountError;
 use DynaPath\Exceptions\InvalidArgumentException;
 use DynaPath\Path;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use stdClass;
+use TypeError;
 
 final class PathTest extends TestCase
 {
@@ -37,21 +40,67 @@ final class PathTest extends TestCase
         Path::fromString("root.\xB1\x31");
     }
 
-    public function testPathsCanExceedDynamoDbDepthLimit(): void
+    public function testCreateAcceptsMaximumDepth(): void
     {
-        $segments = ['root', ...array_fill(0, 40, 'nested')];
-        $path = Path::create(...$segments);
+        $path = Path::create('root', ...array_fill(0, 32, 'nested'));
 
-        self::assertSame($segments, $path->segments);
-        self::assertSame($segments, Path::fromString(implode('.', $segments))->segments);
-        self::assertSame([...$segments, 'child'], $path->child(['child'])->segments);
+        self::assertCount(33, $path);
     }
 
-    public function testChildAcceptsEmptySegments(): void
+    public function testCreateRejectsDepthAboveMaximum(): void
     {
-        $path = Path::create('root', 'items');
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Path depth cannot exceed 32.');
 
-        self::assertSame($path->segments, $path->child([])->segments);
+        Path::create('root', ...array_fill(0, 33, 'nested'));
+    }
+
+    #[DataProvider('depthLimitedPathStrings')]
+    public function testFromStringEnforcesDepthLimit(string $atLimit, string $tooDeep): void
+    {
+        self::assertCount(33, Path::fromString($atLimit));
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Path depth cannot exceed 32.');
+
+        Path::fromString($tooDeep);
+    }
+
+    /**
+     * @return iterable<string, array{string, string}>
+     */
+    public static function depthLimitedPathStrings(): iterable
+    {
+        yield 'map attributes' => [
+            'root' . str_repeat('.nested', 32),
+            'root' . str_repeat('.nested', 33),
+        ];
+        yield 'list indexes' => [
+            'root' . str_repeat('[0]', 32),
+            'root' . str_repeat('[0]', 33),
+        ];
+        yield 'mixed attributes and indexes' => [
+            'root' . str_repeat('.items[0]', 16),
+            'root' . str_repeat('.items[0]', 16) . '.name',
+        ];
+        yield 'quoted punctuation is part of the attribute' => [
+            '"' . str_repeat('a.[0]', 40) . '"' . str_repeat('.nested', 32),
+            '"' . str_repeat('a.[0]', 40) . '"' . str_repeat('.nested', 33),
+        ];
+    }
+
+    public function testChildRejectsArrayArgument(): void
+    {
+        $this->expectException(TypeError::class);
+
+        Path::create('root', 'items')->child([]);
+    }
+
+    public function testChildRequiresAtLeastOneSegment(): void
+    {
+        $this->expectException(ArgumentCountError::class);
+
+        Path::create('root')->child();
     }
 
     public function testFromStringBuildsPathFromParsedSegments(): void
@@ -112,15 +161,44 @@ final class PathTest extends TestCase
         self::assertSame(['root', 'items'], $parent->segments);
     }
 
-    public function testChildAppendsSegmentsAndNormalizesArrayKeys(): void
+    public function testChildAppendsUnpackedSegmentsAndNormalizesArrayKeys(): void
     {
-        $path = Path::create('root')->child([
+        $path = Path::create('root')->child(...[
             10 => 'items',
             20 => 3,
             30 => 'name',
         ]);
 
         self::assertSame(['root', 'items', 3, 'name'], $path->segments);
+    }
+
+    public function testChildNormalizesNamedSegmentKeys(): void
+    {
+        $path = Path::create('root')->child('items', index: 3, leaf: 'name');
+
+        self::assertSame(['root', 'items', 3, 'name'], $path->segments);
+        self::assertSame('"root".M."items".L[3].M."name"', $path->marshaledSearchExpression());
+    }
+
+    public function testChildCanStartWithListIndex(): void
+    {
+        $path = Path::create('items')->child(0, 'name');
+
+        self::assertSame(['items', 0, 'name'], $path->segments);
+        self::assertSame('items[0].name', (string) $path);
+    }
+
+    public function testChildEnforcesCombinedDepthLimit(): void
+    {
+        $base = Path::create('root', ...array_fill(0, 31, 'nested'));
+
+        self::assertCount(33, $base->child('name'));
+        self::assertCount(32, $base);
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Path depth cannot exceed 32.');
+
+        $base->child('items', 0);
     }
 
     public function testIsParentOfRequiresStrictPrefix(): void
@@ -186,9 +264,8 @@ final class PathTest extends TestCase
 
     public function testChildRejectsUnsupportedSegmentType(): void
     {
-        $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage('Path segment must be string or int, stdClass given.');
+        $this->expectException(TypeError::class);
 
-        Path::create('root')->child([new stdClass()]);
+        Path::create('root')->child(new stdClass());
     }
 }
