@@ -16,7 +16,42 @@ final class PathTest extends TestCase
         self::assertSame(['root', 'items', 3, 'name'], $path->segments);
         self::assertSame('root.items[3].name', (string) $path);
         self::assertSame(4, count($path));
+        self::assertSame('root', $path->firstSegment());
         self::assertSame('name', $path->lastSegment());
+    }
+
+    public function testCreateNormalizesNamedSegmentKeys(): void
+    {
+        $path = Path::create('root', field: 'items', index: 3, leaf: 'name');
+
+        self::assertSame(['root', 'items', 3, 'name'], $path->segments);
+        self::assertSame('"root".M."items".L[3].M."name"', $path->marshaledSearchExpression());
+        self::assertTrue(Path::create('root', 'items')->isParentOf($path));
+    }
+
+    public function testFromStringRejectsInvalidUtf8(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Path segment must be a valid UTF-8 string.');
+
+        Path::fromString("root.\xB1\x31");
+    }
+
+    public function testPathsCanExceedDynamoDbDepthLimit(): void
+    {
+        $segments = ['root', ...array_fill(0, 40, 'nested')];
+        $path = Path::create(...$segments);
+
+        self::assertSame($segments, $path->segments);
+        self::assertSame($segments, Path::fromString(implode('.', $segments))->segments);
+        self::assertSame([...$segments, 'child'], $path->child(['child'])->segments);
+    }
+
+    public function testChildAcceptsEmptySegments(): void
+    {
+        $path = Path::create('root', 'items');
+
+        self::assertSame($path->segments, $path->child([])->segments);
     }
 
     public function testFromStringBuildsPathFromParsedSegments(): void
@@ -105,6 +140,7 @@ final class PathTest extends TestCase
 
         self::assertInstanceOf(Path::class, $relative);
         self::assertSame([3, 'name'], $relative->segments);
+        self::assertSame(3, $relative->firstSegment());
         self::assertSame('[3].name', (string) $relative);
         self::assertSame('[3].M."name"', $relative->marshaledSearchExpression());
     }

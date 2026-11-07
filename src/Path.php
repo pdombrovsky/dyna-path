@@ -48,7 +48,7 @@ readonly class Path implements Stringable, Countable
 
         self::validateSegments($segments);
 
-        return new static($segments);
+        return new static(array_values($segments));
     }
 
     /**
@@ -58,11 +58,7 @@ readonly class Path implements Stringable, Countable
      */
     public static function fromString(string $pathString): static
     {
-        $segments = PathStringParser::parse($pathString);
-
-        self::validateSegments($segments);
-
-        return new static($segments);
+        return new static(PathStringParser::parse($pathString));
     }
 
     /**
@@ -311,6 +307,14 @@ readonly class Path implements Stringable, Countable
         }
 
         return new static(array_slice($child->segments, $parentLength));
+    }
+
+    /**
+     * Returns first segment for given path.
+     */
+    public function firstSegment(): int|string
+    {
+        return $this->segments[0];
     }
 
     /**
