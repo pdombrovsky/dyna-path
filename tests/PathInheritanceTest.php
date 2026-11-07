@@ -48,7 +48,7 @@ final class PathInheritanceTest extends TestCase
 
     public function testChildPreservesConcretePathType(): void
     {
-        $child = ExtendedPath::create('root')->child('child', 2);
+        $child = ExtendedPath::create('root')->child(['child', 2]);
 
         self::assertInstanceOf(ExtendedPath::class, $child);
         self::assertSame(['root', 'child', 2], $child->segments);

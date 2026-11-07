@@ -11,7 +11,7 @@ Shared immutable path value object and parser.
 ## Installation
 
 ```bash
-composer require pdombrovsky/dyna-path:^2.0@alpha
+composer require pdombrovsky/dyna-path:^1.1
 ```
 
 ## Path
@@ -39,21 +39,17 @@ $path->segments; // ['map', 'a.b', 3, 'c']
 
 Quoted path segments support JSON string escaping. Indexes must be non-negative integers without leading zeros and must fit into `PHP_INT_MAX`.
 
-Paths have a maximum depth of 32. The root attribute has depth 0; each nested attribute or list index adds one level. A complete path can therefore contain up to 33 segments. `child()` checks the depth of the resulting path.
-
 ### Navigation
 
 ```php
 $path = Path::create('items', 0, 'score');
 
 $parent = $path->parent();
-$child = $path->child('history', 0);
+$child = $path->child(['history', 0]);
 
 Path::create('items')->isParentOf($path); // true
 Path::create('items')->relativePathOf($path); // [0].score
 ```
-
-`child()` requires at least one segment. Use `$path->child(...$segments)` when appending segments stored in a non-empty list.
 
 Equal paths are not considered a parent-child pair. `relativePathOf()` returns:
 
@@ -94,7 +90,7 @@ $path = ExpressionPath::create('items', 0, 'score');
 
 $path instanceof ExpressionPath; // true
 $path->parent() instanceof ExpressionPath; // true
-$path->child('history') instanceof ExpressionPath; // true
+$path->child(['history']) instanceof ExpressionPath; // true
 ```
 
 This allows specialized subclasses to add domain-specific behavior while preserving the base path contract.
