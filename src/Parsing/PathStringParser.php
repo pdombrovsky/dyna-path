@@ -8,6 +8,7 @@ use function ctype_digit;
 use function in_array;
 use function is_string;
 use function json_decode;
+use function json_encode;
 use function sprintf;
 use function strcmp;
 use function strlen;
@@ -36,6 +37,8 @@ final class PathStringParser
     }
 
     /**
+     * Parses a path into fully validated segments.
+     *
      * @return list<string|int>
      *
      * @throws InvalidArgumentException
@@ -259,11 +262,24 @@ final class PathStringParser
         return $decoded;
     }
 
+    /**
+     * @throws InvalidArgumentException
+     */
     private function flushBuffer(): void
     {
         if ($this->buffer === '') {
             return;
         }
+
+        // Quoted attributes have already been validated by json_decode().
+        if ($this->previousChar !== '"') {
+            try {
+                json_encode($this->buffer, JSON_THROW_ON_ERROR);
+            } catch (JsonException) {
+                $this->fail('Path segment must be a valid UTF-8 string.', $this->index);
+            }
+        }
+
         $this->segments[] = $this->buffer;
         $this->buffer = '';
     }

@@ -11,7 +11,7 @@ Shared immutable path value object and parser.
 ## Installation
 
 ```bash
-composer require pdombrovsky/dyna-path:^1.0@alpha
+composer require pdombrovsky/dyna-path:^1.1
 ```
 
 ## Path
@@ -25,6 +25,8 @@ $path = Path::create('items', 0, 'score');
 
 (string) $path; // items[0].score
 $path->segments; // ['items', 0, 'score']
+$path->firstSegment(); // 'items'
+$path->lastSegment(); // 'score'
 ```
 
 Create a path from a string:

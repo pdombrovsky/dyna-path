@@ -4,6 +4,7 @@ namespace DynaPath\Tests\Parsing;
 
 use DynaPath\Exceptions\InvalidArgumentException;
 use DynaPath\Parsing\PathStringParser;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use const PHP_INT_MAX;
 
@@ -39,6 +40,53 @@ final class PathStringParserTest extends TestCase
             ['root', '€'],
             PathStringParser::parse('root."\\u20AC"')
         );
+    }
+
+    public function testParsesUtf8AttributeNames(): void
+    {
+        self::assertSame(
+            ['корень', 'элементы', 0, 'имя😀'],
+            PathStringParser::parse('корень.элементы[0]."имя😀"')
+        );
+    }
+
+    #[DataProvider('invalidUtf8UnquotedPaths')]
+    public function testRejectsInvalidUtf8InUnquotedAttribute(string $pathString): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Path segment must be a valid UTF-8 string.');
+
+        PathStringParser::parse($pathString);
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function invalidUtf8UnquotedPaths(): iterable
+    {
+        yield 'root attribute' => ["\xB1\x31"];
+        yield 'before dot' => ["root.\xB1\x31.child"];
+        yield 'before index' => ["root.\xB1\x31[0]"];
+        yield 'after quoted attribute' => ['"root".' . "\xB1\x31"];
+        yield 'after index' => ["root[0].\xB1\x31"];
+        yield 'incomplete sequence' => ["root.\xE2\x82"];
+        yield 'encoded surrogate' => ["root.\xED\xA0\x80"];
+    }
+
+    public function testRejectsInvalidUtf8InQuotedAttribute(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Invalid quoted attribute name.');
+
+        PathStringParser::parse('root."' . "\xB1\x31" . '"');
+    }
+
+    public function testRejectsUnpairedUnicodeSurrogateEscape(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Invalid quoted attribute name.');
+
+        PathStringParser::parse('root."\uD800"');
     }
 
     public function testAcceptsMaximumIntegerIndex(): void
